@@ -1,8 +1,4 @@
-const { OpenRouter } = require('@openrouter/sdk');
 
-const openrouter = new OpenRouter({
-    apiKey: process.env.OPENROUTER_API_KEY
-});
 
 const HAULPACK_KNOWLEDGE_BASE = `
 You are the official HaulPack AI assistant chatbot.
@@ -126,6 +122,11 @@ module.exports = async function handler(req, res) {
 
         // Add new user message
         messages.push({ role: "user", content: message });
+
+        const { OpenRouter } = await import('@openrouter/sdk');
+        const openrouter = new OpenRouter({
+            apiKey: process.env.OPENROUTER_API_KEY
+        });
 
         const stream = await openrouter.chat.send({
             chatGenerationParams: {
