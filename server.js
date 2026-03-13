@@ -1,10 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenAI } = require('@google/genai');
+const { OpenRouter } = require('@openrouter/sdk');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -17,9 +17,9 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
-// Initialize Google Gemini SDK
-const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY
+// Initialize OpenRouter SDK
+const openrouter = new OpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY
 });
 
 const HAULPACK_KNOWLEDGE_BASE = `
@@ -108,33 +108,52 @@ app.post('/api/chat', async (req, res) => {
     try {
         const { message, history } = req.body;
 
-        let promptContext = HAULPACK_KNOWLEDGE_BASE + "\\n\\nHere is the recent conversation history:\\n";
+        const messages = [
+            { role: "user", content: "System Instructions: " + HAULPACK_KNOWLEDGE_BASE + "\n\nProvide relevant, helpful responses while maintaining context." },
+            { role: "assistant", content: "Understood. I am the official HaulPack AI assistant chatbot." }
+        ];
 
         // Add conversation history
         if (history && Array.isArray(history)) {
             history.forEach(msg => {
-                promptContext += `${msg.sender === 'user' ? 'User' : 'Assistant'}: ${msg.text}\n`;
+                messages.push({
+                    role: msg.sender === 'user' ? 'user' : 'assistant',
+                    content: msg.text
+                });
             });
         }
 
         // Add new user message
-        promptContext += `\nUser: ${message}\nAssistant:`;
+        messages.push({ role: "user", content: message });
 
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: promptContext,
-            config: {
-                temperature: 0.5, // Slightly higher to allow conversational AI while using knowledge base
+        const stream = await openrouter.chat.send({
+            chatGenerationParams: {
+                model: "google/gemma-3n-e2b-it:free",
+                messages: messages,
+                stream: true
             }
         });
 
+        let fullContent = "";
+        for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+                fullContent += content;
+            }
+        }
+
         res.json({
-            response: response.text
+            response: fullContent
         });
     } catch (error) {
-        console.error("Error calling Gemini:", error);
+        console.error("Error calling OpenRouter:", error);
         res.status(500).json({ error: "Sorry, I am having trouble connecting to my brain right now. Please try again." });
     }
+});
+
+// Catch-all route to serve index.html for any other GET requests (SPA behavior)
+app.use((req, res) => {
+    res.sendFile(__dirname + '/index.html');
 });
 
 if (process.env.NODE_ENV !== 'production') {
