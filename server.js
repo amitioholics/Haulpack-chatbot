@@ -9,6 +9,14 @@ const port = 3000;
 app.use(cors());
 app.use(express.json());
 
+// Serve static files (HTML, CSS, JS) from the root directory
+app.use(express.static(__dirname));
+
+// Explicit fallback to serve index.html on the root path
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/index.html');
+});
+
 // Initialize Google Gemini SDK
 const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY
