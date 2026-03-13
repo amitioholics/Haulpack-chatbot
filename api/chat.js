@@ -1,4 +1,8 @@
+const { GoogleGenAI } = require('@google/genai');
 
+const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY
+});
 
 const HAULPACK_KNOWLEDGE_BASE = `
 You are the official HaulPack AI assistant chatbot.
@@ -105,48 +109,26 @@ module.exports = async function handler(req, res) {
     try {
         const { message, history } = req.body;
 
-        const messages = [
-            { role: "user", content: "System Instructions: " + HAULPACK_KNOWLEDGE_BASE + "\n\nProvide relevant, helpful responses while maintaining context." },
-            { role: "assistant", content: "Understood. I am the official HaulPack AI assistant chatbot." }
-        ];
+        let promptContext = HAULPACK_KNOWLEDGE_BASE + "\\n\\nHere is the recent conversation history:\\n";
 
         // Add conversation history
         if (history && Array.isArray(history)) {
             history.forEach(msg => {
-                messages.push({
-                    role: msg.sender === 'user' ? 'user' : 'assistant',
-                    content: msg.text
-                });
+                promptContext += `${msg.sender === 'user' ? 'User' : 'Assistant'}: ${msg.text}\n`;
             });
         }
 
         // Add new user message
-        messages.push({ role: "user", content: message });
+        promptContext += `\nUser: ${message}\nAssistant:`;
 
-        const { OpenRouter } = await import('@openrouter/sdk');
-        const openrouter = new OpenRouter({
-            apiKey: process.env.OPENROUTER_API_KEY
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: promptContext,
         });
 
-        const stream = await openrouter.chat.send({
-            chatGenerationParams: {
-                model: "google/gemma-3n-e2b-it:free",
-                messages: messages,
-                stream: true
-            }
-        });
-
-        let fullContent = "";
-        for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content;
-            if (content) {
-                fullContent += content;
-            }
-        }
-
-        res.status(200).json({ response: fullContent });
+        res.status(200).json({ response: response.text });
     } catch (error) {
-        console.error("Error calling OpenRouter:", error);
+        console.error("Error calling Gemini:", error);
         res.status(500).json({ error: "Sorry, I am having trouble connecting to my brain right now. Please try again." });
     }
 };
